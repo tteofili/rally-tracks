@@ -51,6 +51,9 @@
           {%- if hnsw_ef_construction is defined %},
           "ef_construction": {{ hnsw_ef_construction }}
           {%- endif %}
+          {%- if auto_calibrate is defined %},
+          "auto_calibrate": {{ auto_calibrate | tojson }}
+          {%- endif %}
         }
       }
     }

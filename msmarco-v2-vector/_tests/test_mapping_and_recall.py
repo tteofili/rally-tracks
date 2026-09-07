@@ -49,6 +49,16 @@ def render_mapping(template_name, params=None):
     return json.loads(rendered)
 
 
+def render_operations(params=None):
+    ops_dir = TRACK_DIR / "operations"
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(ops_dir)))
+    base = {"index_settings": {}}
+    if params:
+        base.update(params)
+    rendered = env.get_template("default.json").render(**base)
+    return json.loads(f"[{rendered}]")
+
+
 # --- dense_vector index_options: auto_calibrate ---
 
 
@@ -176,3 +186,27 @@ async def test_runner_default_sentinel_opens_standard_queries_file():
 
     assert any(track_module.QUERIES_RECALL_FILENAME in p for p in opened)
     assert not any(track_module.QUERIES_RECALL_10M_FILENAME in p for p in opened)
+
+
+# --- operations/default.json: recall-doc-set based on initial_indexing_ingest_doc_count ---
+
+
+class TestOperationsRecallDocSet:
+    def _recall_doc_sets(self, params=None):
+        ops = render_operations(params)
+        return {o["recall-doc-set"] for o in ops if o.get("operation-type") == "knn-recall"}
+
+    def test_default_is_full(self):
+        assert self._recall_doc_sets() == {"full"}
+
+    def test_10m_doc_count_selects_10m_set(self):
+        assert self._recall_doc_sets({"initial_indexing_ingest_doc_count": 10_000_000}) == {"10m"}
+
+    def test_other_doc_count_selects_full_set(self):
+        assert self._recall_doc_sets({"initial_indexing_ingest_doc_count": 5_000_000}) == {"full"}
+
+    def test_all_knn_recall_ops_get_same_doc_set(self):
+        ops = render_operations({"initial_indexing_ingest_doc_count": 10_000_000})
+        recall_ops = [o for o in ops if o.get("operation-type") == "knn-recall"]
+        assert len(recall_ops) > 0
+        assert all(o["recall-doc-set"] == "10m" for o in recall_ops)
